@@ -7,7 +7,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.utils import executor
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from save_into_google_sheet import insert_info_into_sheet
+from save_into_google_sheet import insert_info_into_sheet, account_map
 
 
 # Получаем токен бота из переменной окружения
@@ -22,10 +22,18 @@ storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
 
-# Определяем состояния формы адреса
+# Определяем состояния формы для адреса
 class AddressForm(StatesGroup):
     street = State()
     house = State()
+    apartment = State()
+    reading = State()
+
+
+# Определяем состояния формы для лицевого счёта
+class AccountForm(StatesGroup):
+    account = State()
+    address = State()
     apartment = State()
     reading = State()
 
@@ -44,11 +52,11 @@ for street in streets:
     # Для callback_data используем префикс, чтобы потом легко отфильтровать выбранную улицу
     street_keyboard.add(InlineKeyboardButton(text=street, callback_data=f"street_{street}"))
 street_keyboard.add(types.InlineKeyboardButton(
-            text="Назад", callback_data="meter_readings"))
+    text="Назад", callback_data="meter_readings")
+)
+
 
 # Обработчик команд /start и /menu
-
-
 @dp.message_handler(commands=['start', 'menu'], state="*")
 async def send_welcome(message: types.Message, state: FSMContext):
     keyboard = types.InlineKeyboardMarkup(row_width=2)
@@ -58,41 +66,37 @@ async def send_welcome(message: types.Message, state: FSMContext):
         types.InlineKeyboardButton(text="Официальный сайт", url="https://komfort67.com/index.php")
     )
     message_text = """
-    👋 Добро пожаловать!  
+👋 Добро пожаловать!  
 Выберите нужный раздел для удобного управления услугами:  
-Передать показания счётчика холодной воды 📊❄️  
-Официальный сайт Управляющей компании ООО Комфорт-сервис ✅  
+• Передать показания счётчика холодной воды 📊❄️  
+• Официальный сайт Управляющей компании ООО Комфорт-сервис ✅  
     """
     await message.answer(message_text, reply_markup=keyboard, parse_mode="markdown")
     await state.finish()  # Завершаем работу FSM
 
 
 # Обработчик кнопки "Передать показания счётчиков"
-
-
 @dp.callback_query_handler(lambda c: c.data == 'meter_readings', state="*")
 async def process_meter_readings(callback_query: types.CallbackQuery, state: FSMContext):
     keyboard = types.InlineKeyboardMarkup(row_width=1)
     keyboard.add(
         types.InlineKeyboardButton("По адресу", callback_data="by_address"),
-        types.InlineKeyboardButton(
-            "По № лицевого счета", callback_data="by_account"),
+        types.InlineKeyboardButton("По № лицевого счета", callback_data="by_account")
     )
-    await bot.send_message(callback_query.from_user.id, "Выберите способ передачи показаний:\n(Для выхода в меню воспользуйтесь командой /menu)", reply_markup=keyboard)
+    await bot.send_message(callback_query.from_user.id,
+                           "Выберите способ передачи показаний:\n(Для выхода в меню воспользуйтесь командой /menu)",
+                           reply_markup=keyboard)
     await bot.answer_callback_query(callback_query.id)
     await state.finish()  # Завершаем работу FSM
 
+
 # Обработчик кнопки "По адресу"
-
-
 @dp.callback_query_handler(lambda c: c.data == 'by_address', state="*")
 async def process_by_address(callback_query: types.CallbackQuery):
-
     message_text = """
-Вы выбрали передать показания по адресу.
+Вы выбрали передачу показаний по адресу.
 Выберите улицу:
     """
-
     await bot.send_message(
         callback_query.from_user.id,
         message_text,
@@ -108,7 +112,7 @@ async def process_street(callback_query: types.CallbackQuery, state: FSMContext)
     street = callback_query.data.replace("street_", "")
     # Сохраняем выбранную улицу
     await state.update_data(street=street)
-    await bot.send_message(callback_query.from_user.id, "Введите № дома:")
+    await bot.send_message(callback_query.from_user.id, "Введите номер дома:")
     await AddressForm.house.set()
     await bot.answer_callback_query(callback_query.id)
 
@@ -117,7 +121,7 @@ async def process_street(callback_query: types.CallbackQuery, state: FSMContext)
 @dp.message_handler(state=AddressForm.house)
 async def process_house(message: types.Message, state: FSMContext):
     await state.update_data(house=message.text)
-    await message.answer("Введите № квартиры:")
+    await message.answer("Введите номер квартиры:")
     await AddressForm.apartment.set()
 
 
@@ -129,6 +133,7 @@ async def process_apartment(message: types.Message, state: FSMContext):
     await AddressForm.reading.set()
 
 
+# Обработчик ввода показаний для адресного режима
 @dp.message_handler(state=AddressForm.reading)
 async def process_reading(message: types.Message, state: FSMContext):
     await state.update_data(reading=message.text)
@@ -141,10 +146,10 @@ async def process_reading(message: types.Message, state: FSMContext):
     result_message = (
         f"Адрес: {street}\n"
         f"Дом: {house}\n"
-        f"Квартира: Кв. {apartment}\n"
+        f"Квартира: {apartment}\n"
         f"Показания счётчика холодной воды: {reading}"
     )
-    # Создаём клавиатуру с двумя кнопками:
+    # Создаём клавиатуру с двумя кнопками
     final_keyboard = InlineKeyboardMarkup(row_width=2)
     final_keyboard.add(
         InlineKeyboardButton(text="Отправить данные", callback_data="submit_data"),
@@ -153,7 +158,7 @@ async def process_reading(message: types.Message, state: FSMContext):
     await message.answer(result_message, reply_markup=final_keyboard)
 
 
-# Обработчик нажатия кнопки "Отправить данные"
+# Обработчик нажатия кнопки "Отправить данные" для адресного режима
 @dp.callback_query_handler(lambda c: c.data == 'submit_data', state="*")
 async def process_submit(callback_query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -169,19 +174,93 @@ async def process_submit(callback_query: types.CallbackQuery, state: FSMContext)
     if result:
         await bot.send_message(callback_query.from_user.id, "Ваши данные успешно отправлены!")
         await state.finish()  # Завершаем работу FSM
-        await bot.answer_callback_query(callback_query.id)
     else:
-        await bot.send_message(callback_query.from_user.id, "Данные не сохранились! Повторите попытку(/menu)!")
+        await bot.send_message(callback_query.from_user.id, "Данные не сохранились! Повторите попытку (/menu)!")
         await state.finish()  # Завершаем работу FSM
-        await bot.answer_callback_query(callback_query.id)
+    await bot.answer_callback_query(callback_query.id)
 
 
-# Обработчик кнопки "По № лицевого счета"
+# Обработчик кнопки "По № лицевого счёта"
+@dp.callback_query_handler(lambda c: c.data == 'by_account', state="*")
+async def process_by_account(callback_query: types.CallbackQuery, state: FSMContext):
+    await bot.send_message(
+        callback_query.from_user.id,
+        "Вы выбрали передачу показаний по лицевому счёту.\nПожалуйста, введите номер вашего лицевого счёта:",
+        parse_mode="markdown"
+    )
+    await AccountForm.account.set()  # Переводим FSM в состояние ввода номера лицевого счёта
+    await bot.answer_callback_query(callback_query.id)
 
 
-@dp.callback_query_handler(lambda c: c.data == 'by_account')
-async def process_by_account(callback_query: types.CallbackQuery):
-    await bot.send_message(callback_query.from_user.id, "Вы выбрали передать показания по лицевому счету")
+# Обработчик ввода номера лицевого счёта
+@dp.message_handler(state=AccountForm.account)
+async def process_account(message: types.Message, state: FSMContext):
+    account_text = message.text.strip()
+    # Простейшая проверка: корректный лицевой счёт должен состоять только из цифр
+    if not account_text.isdigit():
+        await message.answer("Введён некорректный номер лицевого счёта.\nПожалуйста, попробуйте снова:")
+        return  # Остаёмся в том же состоянии для повторного ввода
+    account = int(account_text)
+    account_status = await account_map(account)
+    # Если account_status имеет тип bool, значит введён неверный номер
+    if isinstance(account_status, bool):
+        await message.answer("Введён некорректный номер лицевого счёта.\nПожалуйста, попробуйте снова:")
+        return  # Остаёмся в том же состоянии для повторного ввода
+    # Сохраняем адрес и квартиру, полученные из account_status
+    await state.update_data(account=account, apartment=account_status[1], address=account_status[2])
+    await message.answer(
+        f"Лицевой счёт успешно подтверждён!\n"
+        f"Адрес: {account_status[2]}\n"
+        f"Квартира: {account_status[1]}\n\n"
+        "Введите, пожалуйста, показания счётчика холодной воды:"
+    )
+    await AccountForm.reading.set()
+
+
+# Обработчик ввода показаний для режима по лицевому счёту
+@dp.message_handler(state=AccountForm.reading)
+async def process_account_reading(message: types.Message, state: FSMContext):
+    await state.update_data(reading=message.text.strip())
+    data = await state.get_data()
+    account = data.get('account')
+    address = data.get('address')
+    apartment = data.get('apartment')
+    reading = data.get('reading')
+    result_message = (
+        f"Лицевой счёт: {account}\n"
+        f"Адрес: {address}\n"
+        f"Квартира: {apartment}\n"
+        f"Показания счётчика холодной воды: {reading}\n\n"
+        "Проверьте введённые данные. Если всё верно — нажмите «Отправить данные», "
+        "иначе — выберите «Заполнить заново»."
+    )
+    final_keyboard = InlineKeyboardMarkup(row_width=2)
+    final_keyboard.add(
+        InlineKeyboardButton(text="Отправить данные", callback_data="submit_data_account"),
+        InlineKeyboardButton(text="Заполнить заново", callback_data="meter_readings")
+    )
+    await message.answer(result_message, reply_markup=final_keyboard)
+
+
+# Обработчик нажатия кнопки "Отправить данные" для режима по лицевому счёту
+@dp.callback_query_handler(lambda c: c.data == 'submit_data_account', state="*")
+async def process_submit_account(callback_query: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    today = date.today().strftime("%d.%m.%Y")
+    account = data.get('account', '')
+    address = data.get('address', '')
+    apartment = data.get('apartment', '')
+    reading = data.get('reading', '').strip()
+    if reading.count('.') > 0:
+        reading = reading.replace('.', ',')
+    # Формируем массив данных для отправки в Google Sheet
+    answer = [today, account, address, apartment, reading]
+    result = await insert_info_into_sheet(answer)
+    if result:
+        await bot.send_message(callback_query.from_user.id, "Ваши данные успешно отправлены!")
+    else:
+        await bot.send_message(callback_query.from_user.id, "Данные не сохранились! Повторите попытку (/menu)!")
+    await state.finish()  # Завершаем работу FSM
     await bot.answer_callback_query(callback_query.id)
 
 
