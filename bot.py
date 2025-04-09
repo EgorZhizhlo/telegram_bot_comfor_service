@@ -144,9 +144,8 @@ async def process_reading(message: types.Message, state: FSMContext):
     apartment = data.get('apartment', '').strip()
     reading = data.get('reading', '').strip()
     result_message = (
-        f"Адрес: {street}\n"
-        f"Дом: {house}\n"
-        f"Квартира: {apartment}\n"
+        f"Адрес: {street}, дом № {house}\n"
+        f"Квартира: Кв. {apartment}\n"
         f"Показания счётчика холодной воды: {reading}"
     )
     # Создаём клавиатуру с двумя кнопками
