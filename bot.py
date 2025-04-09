@@ -1,11 +1,13 @@
 import os
 import logging
+from datetime import date
 from aiogram import Bot, Dispatcher, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import StatesGroup, State
 from aiogram.utils import executor
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from save_into_google_sheet import insert_info_into_sheet
 
 
 # Получаем токен бота из переменной окружения
@@ -132,11 +134,15 @@ async def process_reading(message: types.Message, state: FSMContext):
     await state.update_data(reading=message.text)
     # Получаем все данные, сохранённые в FSM
     data = await state.get_data()
+    street = data.get('street', '').strip()
+    house = data.get('house', '').strip()
+    apartment = data.get('apartment', '').strip()
+    reading = data.get('reading', '').strip()
     result_message = (
-        f"Адрес: {data['street']}\n"
-        f"Дом: {data['house']}\n"
-        f"Квартира: {data['apartment']}\n"
-        f"Показания счётчика холодной воды: {data['reading']}"
+        f"Адрес: {street}\n"
+        f"Дом: {house}\n"
+        f"Квартира: Кв. {apartment}\n"
+        f"Показания счётчика холодной воды: {reading}"
     )
     # Создаём клавиатуру с двумя кнопками:
     final_keyboard = InlineKeyboardMarkup(row_width=2)
@@ -151,11 +157,23 @@ async def process_reading(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(lambda c: c.data == 'submit_data', state="*")
 async def process_submit(callback_query: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
-    # Здесь разместите необходимую логику для обработки отправки данных,
-    # например, сохранение в базу данных или отправку сообщения на другой сервис.
-    await bot.send_message(callback_query.from_user.id, "Ваши данные успешно отправлены!")
-    await state.finish()  # Завершаем работу FSM
-    await bot.answer_callback_query(callback_query.id)
+    today = date.today().strftime("%d.%m.%Y")
+    street = data.get('street', '').strip()
+    house = data.get('house', '').strip()
+    apartment = data.get('apartment', '').strip()
+    reading = data.get('reading', '').strip()
+    if reading.count('.') > 0:
+        reading = reading.replace('.', ',')
+    answer = [today, None, street + ", дом № " + house, "Кв. " + apartment, reading]
+    result = await insert_info_into_sheet(answer)
+    if result:
+        await bot.send_message(callback_query.from_user.id, "Ваши данные успешно отправлены!")
+        await state.finish()  # Завершаем работу FSM
+        await bot.answer_callback_query(callback_query.id)
+    else:
+        await bot.send_message(callback_query.from_user.id, "Данные не сохранились! Повторите попытку(/menu)!")
+        await state.finish()  # Завершаем работу FSM
+        await bot.answer_callback_query(callback_query.id)
 
 
 # Обработчик кнопки "По № лицевого счета"
@@ -165,6 +183,7 @@ async def process_submit(callback_query: types.CallbackQuery, state: FSMContext)
 async def process_by_account(callback_query: types.CallbackQuery):
     await bot.send_message(callback_query.from_user.id, "Вы выбрали передать показания по лицевому счету")
     await bot.answer_callback_query(callback_query.id)
+
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)

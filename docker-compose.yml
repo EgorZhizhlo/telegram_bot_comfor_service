@@ -3,4 +3,6 @@ services:
     build: .
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
+      INFO_SPREADSHEET_KEY: ${INFO_SPREADSHEET_KEY}
+      ACC_SPREADSHEET_KEY: ${ACC_SPREADSHEET_KEY}
     restart: always
