@@ -159,7 +159,9 @@ async def process_electr(message: types.Message, state: FSMContext):
         f"Адрес: {street}, дом № {house}\n"
         f"Квартира: Кв. {apartment}\n"
         f"Показания счётчика холодной воды: {cold_water}\n"
-        f"Показания счётчика электроэнергии: {electr}"
+        f"Показания счётчика электроэнергии: {electr}\n\n"
+        "Проверьте введённые данные. Если всё верно — нажмите «Отправить данные», "
+        "иначе — выберите «Заполнить заново»."
     )
     final_keyboard = InlineKeyboardMarkup(row_width=2)
     final_keyboard.add(
@@ -256,7 +258,7 @@ async def process_account_electr(message: types.Message, state: FSMContext):
         f"Лицевой счёт: {account}\n"
         f"Адрес: {address}\n"
         f"Квартира: {apartment}\n"
-        f"Показания счётчика холодной воды: {cold_water}\n\n"
+        f"Показания счётчика холодной воды: {cold_water}\n"
         f"Показания счётчика электроэнергии: {electr}\n\n"
         "Проверьте введённые данные. Если всё верно — нажмите «Отправить данные», "
         "иначе — выберите «Заполнить заново»."
